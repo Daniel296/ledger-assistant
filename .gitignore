@@ -1,0 +1,7 @@
+target/
+.idea/
+*.iml
+.DS_Store
+.env
+.claude/settings.local.json
+assistant/src/main/frontend/generated/
