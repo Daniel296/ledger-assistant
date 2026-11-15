@@ -4,3 +4,16 @@ server:
 spring:
   application:
     name: ledger-mcp
+  http:
+    clients:
+      connect-timeout: 2s
+      read-timeout: 5s
+  ai:
+    mcp:
+      server:
+        name: ledger-mcp
+        protocol: STATELESS
+
+ledger:
+  url: http://localhost:8080
+  accounts-file: accounts.json

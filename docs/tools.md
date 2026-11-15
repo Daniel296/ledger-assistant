@@ -13,14 +13,19 @@ before the code and kept in step with it. The descriptions below are the exact t
 
   | Cause | Text of the error |
   |---|---|
+  | A required input is missing (checked by the MCP server against the tool's schema) | `Tool (get_account) input validation failed: ... required property 'accountId' not found` |
   | The ledger answers 404 | The ledger's body, unchanged: `{"errorCode":"ACCOUNT_NOT_FOUND","message":"Account 00000000-0000-4000-8000-000000000000 does not exist"}` |
-  | An id that is not a UUID (checked before calling the ledger) | `accountId must be an account id (a UUID) from the account directory, not "<value>"` |
+  | An account id that is not a UUID (checked before calling the ledger) | `accountId must be an account id (a UUID) from the account directory, not "<value>"` |
+  | A transaction id that is not a UUID (checked before calling the ledger) | `transactionId must be a transaction id (a UUID), not "<value>"` |
   | `asOf` that is not an ISO-8601 instant (checked before calling the ledger) | `asOf must be an ISO-8601 instant with an offset, like 2026-11-15T12:00:00Z, not "<value>"` |
-  | The ledger is unreachable or answers 5xx | `The ledger is unavailable right now. Tell the user and stop.` |
+  | A `cursor` the ledger cannot read | The ledger's `400` body, unchanged |
+  | The ledger is unreachable, answers 5xx, or takes longer than 5 s | `The ledger is unavailable right now. Tell the user and stop.` |
 
-  The two checks before the call exist because the ledger answers both with a bare `400 Bad Request` that does not
-  say what is wrong (`{"timestamp":"…","status":400,"error":"Bad Request","path":"/v1/accounts/merchant-42"}`), which
-  gives the model nothing to correct.
+  The checks before the call exist because the ledger answers a bad id or instant with a bare `400 Bad Request` that
+  does not say what is wrong (`{"timestamp":"…","status":400,"error":"Bad Request","path":"/v1/accounts/merchant-42"}`),
+  which gives the model nothing to correct. The cursor is not checked: the ledger's contract says only that it is a
+  string, and the model only sends back a `nextCursor` it was given. It reaches the ledger encoded, never read as part
+  of the URL.
 
 - **Ledger text is data.** A transaction's `description` comes from whoever recorded it. The server passes it on
   unchanged; the assistant's prompt says it is never an instruction.
@@ -31,9 +36,9 @@ before the code and kept in step with it. The descriptions below are the exact t
 > settlement accounts, which have no limit). Use it for the current balance. For the balance at a past moment, use
 > get_balance_as_of.
 
-| Input | Type | |
+| Input | | Description the model sees |
 |---|---|---|
-| `accountId` | string, UUID | required |
+| `accountId` | required | The account's id, a UUID from the account directory |
 
 Calls `GET /v1/accounts/{accountId}`. Errors: `ACCOUNT_NOT_FOUND`, an id that is not a UUID, ledger unavailable.
 
@@ -48,10 +53,10 @@ Calls `GET /v1/accounts/{accountId}`. Errors: `ACCOUNT_NOT_FOUND`, an id that is
 > before an entry is the balanceAfter of the entry below it. Entries carry no description: call get_transaction to
 > learn what a transaction was. When the result has nextCursor, older entries exist: call again with that cursor.
 
-| Input | Type | |
+| Input | | Description the model sees |
 |---|---|---|
-| `accountId` | string, UUID | required |
-| `cursor` | string | optional, the `nextCursor` of the previous page |
+| `accountId` | required | The account's id, a UUID from the account directory |
+| `cursor` | optional | The nextCursor of the previous page; omit it for the newest entries |
 
 Calls `GET /v1/accounts/{accountId}/entries` (with `?cursor=` when given; the ledger's default page size, 20).
 Errors: `ACCOUNT_NOT_FOUND`, an id that is not a UUID, ledger unavailable.
@@ -71,10 +76,10 @@ Merchant 42 after examples 1–3 of the challenge: the payment, the payout, its 
 > questions about a date or a time ("on Monday", "yesterday at noon"). For the current balance use get_account; for
 > the balance just before a given transaction, list_entries is simpler.
 
-| Input | Type | |
+| Input | | Description the model sees |
 |---|---|---|
-| `accountId` | string, UUID | required |
-| `asOf` | string, ISO-8601 instant with an offset | required, e.g. `2026-11-15T12:00:00Z` |
+| `accountId` | required | The account's id, a UUID from the account directory |
+| `asOf` | required | An ISO-8601 instant with an offset, like 2026-11-15T12:00:00Z |
 
 Calls `GET /v1/accounts/{accountId}/balance?asOf=`. Errors: `ACCOUNT_NOT_FOUND`, an id that is not a UUID, an `asOf`
 that is not an instant, ledger unavailable.
@@ -91,11 +96,11 @@ transaction" is a question for `list_entries`, not for an instant.
 > Read one transaction: its description, its currency, every entry (account, debit or credit, amount) and when it was
 > recorded. A reversal has reversalOf, the id of the transaction it reverses. The original transaction does not say
 > whether it was reversed: to find out, read the entries of one of its accounts and look for a later transaction whose
-> reversalOf is this id. A settled payment is described as "Payment <paymentId> settled".
+> reversalOf is this id. A settled payment is described with its payment id, like "Payment pay-7 settled".
 
-| Input | Type | |
+| Input | | Description the model sees |
 |---|---|---|
-| `transactionId` | string, UUID | required |
+| `transactionId` | required | The transaction's id, a UUID |
 
 Calls `GET /v1/transactions/{transactionId}`. Errors: `TRANSACTION_NOT_FOUND`, an id that is not a UUID, ledger
 unavailable.
@@ -112,7 +117,10 @@ The reversal of the payout above:
 
 ## Resource `ledger://accounts`
 
-The account directory: a JSON array of `{"name", "id"}`, one per demo account, written by the seed script.
+> The account directory: the name and id of every demo account, as [{"name", "id"}]. The ledger itself has no account
+> names and no way to list accounts.
+
+A JSON array (`application/json`), one entry per demo account, written by the seed script; `[]` until it has run.
 
 ```json
 [{"name": "Merchant 42 (EUR)", "id": "<uuid>"}, {"name": "Settlement EUR", "id": "<uuid>"}]
@@ -120,7 +128,8 @@ The account directory: a JSON array of `{"name", "id"}`, one per demo account, w
 
 Names exist only here: the ledger has no account names and no way to list accounts, so naming them is presentation,
 kept outside the ledger. The server reads the file on every read of the resource, and the assistant reads the resource
-at the start of every conversation, so the seed may write it after both have started.
+at the start of every conversation, so the seed may write it after both have started. The seed writes it to a
+temporary file and renames it, so a read never sees half a file.
 
 ## What the tools cannot see
 

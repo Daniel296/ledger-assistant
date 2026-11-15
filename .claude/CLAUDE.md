@@ -26,9 +26,10 @@ Everything runs in Docker; `run.sh` starts the ledger, the model, both modules a
 ## Code
 
 - Layering: entry point (MCP tool, view, runner) → service → client. Entry points stay thin; HTTP calls live only
-  in clients, behind an interface.
+  in clients, behind an interface. A service exists only when there is logic between the entry point and the client:
+  `ledger-mcp`'s tools only check their input and make one GET, so they call the client directly.
 - Constructor injection only, depending on abstractions.
-- No Lombok: records for data.
+- Records for data. Loggers come from Lombok's `@Slf4j`.
 - Lines are at most 128 characters.
 - Call chains with more than two calls: one call per line, with `.stream()` kept next to its source.
 - Never build strings with `+`: use `"...%s...".formatted(...)` (and `{}` placeholders in log calls).
