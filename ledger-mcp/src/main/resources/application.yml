@@ -16,4 +16,4 @@ spring:
 
 ledger:
   url: http://localhost:8080
-  accounts-file: accounts.json
+  accounts-file: ../data/accounts.json

@@ -10,7 +10,10 @@ Anthropic Java SDK, Vaadin 25, Maven. Two modules:
 - `ledger-mcp`: the MCP server, port 8081. Four read tools over the ledger's REST API.
 - `assistant`: the web chat, the agent loop, the MCP client and the eval, port 8090.
 
-Everything runs in Docker; `run.sh` starts the ledger, the model, both modules and the demo data.
+Everything runs in Docker, as two independent stacks: the ledger starts from its own repository, and `run.sh` here
+starts the model and both modules and seeds the demo data. ledger-api is never part of this repository, not even as a
+submodule: the assistant reaches it only over REST on port 8080, and the seed reaches its Kafka through the compose
+project `ledger-api`.
 
 ## Rules that must never be broken
 

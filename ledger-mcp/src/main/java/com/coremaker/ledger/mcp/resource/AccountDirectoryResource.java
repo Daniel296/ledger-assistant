@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 
 import com.coremaker.ledger.mcp.config.LedgerProperties;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Component
 public class AccountDirectoryResource {
 
@@ -17,7 +20,8 @@ public class AccountDirectoryResource {
 
     public AccountDirectoryResource(LedgerProperties properties) {
 
-        this.accountsFile = properties.accountsFile();
+        this.accountsFile = Path.of(properties.accountsFile());
+        log.info("The account directory is read from {}", accountsFile.toAbsolutePath().normalize());
     }
 
     @McpResource(uri = "ledger://accounts", name = "accounts", mimeType = "application/json", description = """

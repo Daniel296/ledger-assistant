@@ -5,3 +5,4 @@ target/
 .env
 .claude/settings.local.json
 assistant/src/main/frontend/generated/
+data/
